@@ -1,0 +1,3 @@
+C:/Users/Kutsho/Documents/Hardware/Arduino/abschlussprojektesp32/sketch_mar23a/loop-midi/test/build/CMakeFiles/midi_list.dir
+C:/Users/Kutsho/Documents/Hardware/Arduino/abschlussprojektesp32/sketch_mar23a/loop-midi/test/build/CMakeFiles/ALL_BUILD.dir
+C:/Users/Kutsho/Documents/Hardware/Arduino/abschlussprojektesp32/sketch_mar23a/loop-midi/test/build/CMakeFiles/ZERO_CHECK.dir

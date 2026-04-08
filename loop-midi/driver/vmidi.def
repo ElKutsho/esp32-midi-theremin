@@ -1,0 +1,5 @@
+LIBRARY vmidi
+EXPORTS
+    midMessage
+    modMessage
+    DriverProc

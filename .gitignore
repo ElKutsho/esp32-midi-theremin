@@ -1,0 +1,9 @@
+node_modules/
+dist/
+dist-electron/
+release/
+*.exe
+midi-bridge-app-backup*/
+sketch_mar23a-backup*/
+.claude/
+loop-midi/build/
