@@ -38,16 +38,6 @@ export interface Template {
   builtIn?: boolean;
 }
 
-export type WaveShape = 'sine' | 'triangle' | 'sawtooth' | 'square';
-
-export interface SynthState {
-  enabled: boolean;
-  volume: number;
-  waveShape: WaveShape;
-  reverbMix: number;
-  filterCutoff: number;
-}
-
 export interface AppState {
   serial: {
     connected: boolean;
@@ -75,7 +65,6 @@ declare global {
         listOutputs: () => Promise<string[]>;
         openOutput: (portName: string) => Promise<boolean>;
         closeOutput: () => Promise<void>;
-        getPortName: () => Promise<string>;
         send: (data: number[]) => void;
       };
     };

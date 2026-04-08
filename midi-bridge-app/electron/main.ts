@@ -127,10 +127,6 @@ function setupIPC(): void {
     await closeMidiOutput();
   });
 
-  ipcMain.handle('midi:get-port-name', () => {
-    return midiPortName;
-  });
-
   ipcMain.on('midi:send', (_event, data: number[]) => {
     sendMidi(data);
   });

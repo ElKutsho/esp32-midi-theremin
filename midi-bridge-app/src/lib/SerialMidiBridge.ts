@@ -149,10 +149,6 @@ export class SerialMidiBridge {
     this.sensorConfigs = configs;
   }
 
-  setOctave(octave: number): void {
-    this.octave = octave;
-  }
-
   private getNotesForSensor(sensorIndex: number): number[] {
     const config = this.sensorConfigs[sensorIndex];
     if (!config) return [];
@@ -276,7 +272,7 @@ export class SerialMidiBridge {
 
   // --- Serial (Web Serial API) ---
 
-  async listSerialPorts(): Promise<SerialPort[]> {
+  private async listSerialPorts(): Promise<SerialPort[]> {
     if (!('serial' in navigator)) return [];
     return navigator.serial.getPorts();
   }

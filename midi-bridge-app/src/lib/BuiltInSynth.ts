@@ -16,7 +16,6 @@ export class BuiltInSynth {
   private reverb: ConvolverNode | null = null;
   private reverbGain: GainNode | null = null;
   private dryGain: GainNode | null = null;
-  private analyser: AnalyserNode | null = null;
   private voices: Map<number, Voice> = new Map();
   private _enabled = false;
   private _volume = 0.7;
@@ -51,8 +50,6 @@ export class BuiltInSynth {
   get filterCutoff() { return this._filterCutoff; }
   set filterCutoff(v: number) { this._filterCutoff = v; }
 
-  get analyserNode(): AnalyserNode | null { return this.analyser; }
-
   private async ensureContext(): Promise<AudioContext> {
     if (!this.ctx) {
       this.ctx = new AudioContext();
@@ -60,10 +57,6 @@ export class BuiltInSynth {
       // Master gain
       this.masterGain = this.ctx.createGain();
       this.masterGain.gain.value = this._volume;
-
-      // Analyser for visualization
-      this.analyser = this.ctx.createAnalyser();
-      this.analyser.fftSize = 256;
 
       // Reverb
       this.reverb = this.ctx.createConvolver();
@@ -75,13 +68,12 @@ export class BuiltInSynth {
       this.dryGain = this.ctx.createGain();
       this.dryGain.gain.value = 1 - this._reverbMix * 0.5;
 
-      // Routing: voices → masterGain → dry/reverb → analyser → output
+      // Routing: voices → masterGain → dry/reverb → output
       this.masterGain.connect(this.dryGain);
       this.masterGain.connect(this.reverb);
       this.reverb.connect(this.reverbGain);
-      this.reverbGain.connect(this.analyser);
-      this.dryGain.connect(this.analyser);
-      this.analyser.connect(this.ctx.destination);
+      this.reverbGain.connect(this.ctx.destination);
+      this.dryGain.connect(this.ctx.destination);
     }
 
     if (this.ctx.state === 'suspended') {
@@ -198,20 +190,6 @@ export class BuiltInSynth {
     for (const [note] of this.voices) {
       this.noteOff(note);
     }
-  }
-
-  getFrequencyData(): Uint8Array | null {
-    if (!this.analyser) return null;
-    const data = new Uint8Array(this.analyser.frequencyBinCount);
-    this.analyser.getByteFrequencyData(data);
-    return data;
-  }
-
-  getWaveformData(): Uint8Array | null {
-    if (!this.analyser) return null;
-    const data = new Uint8Array(this.analyser.frequencyBinCount);
-    this.analyser.getByteTimeDomainData(data);
-    return data;
   }
 
   destroy(): void {

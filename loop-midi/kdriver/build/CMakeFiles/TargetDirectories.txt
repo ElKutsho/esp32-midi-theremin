@@ -1,3 +1,0 @@
-C:/Users/Kutsho/Documents/Hardware/Arduino/abschlussprojektesp32/sketch_mar23a/loop-midi/kdriver/build/CMakeFiles/vmidi_km.dir
-C:/Users/Kutsho/Documents/Hardware/Arduino/abschlussprojektesp32/sketch_mar23a/loop-midi/kdriver/build/CMakeFiles/ALL_BUILD.dir
-C:/Users/Kutsho/Documents/Hardware/Arduino/abschlussprojektesp32/sketch_mar23a/loop-midi/kdriver/build/CMakeFiles/ZERO_CHECK.dir

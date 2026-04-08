@@ -275,11 +275,6 @@ export function useMidiBridge() {
     await bridgeRef.current.testMidiOutput();
   }, []);
 
-  const testAftertouch = useCallback(async () => {
-    if (!bridgeRef.current) return;
-    await bridgeRef.current.testAftertouch();
-  }, []);
-
   const toggleCcMode = useCallback(() => {
     if (!bridgeRef.current) return;
     const next = !bridgeRef.current.ccMode;
@@ -345,7 +340,6 @@ export function useMidiBridge() {
     disconnectMidiOutput,
     refreshMidiOutputs,
     testMidiOutput,
-    testAftertouch,
     toggleCcMode,
     updateSensorConfig,
     loadAllConfigs,

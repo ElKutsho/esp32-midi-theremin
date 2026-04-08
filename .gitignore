@@ -6,4 +6,4 @@ release/
 midi-bridge-app-backup*/
 sketch_mar23a-backup*/
 .claude/
-loop-midi/build/
+loop-midi/
