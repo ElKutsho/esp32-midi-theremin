@@ -21,7 +21,10 @@ export default function App() {
     disconnectMidiOutput,
     refreshMidiOutputs,
     testMidiOutput,
+    testAftertouch,
     toggleCcMode,
+    setAtInvert,
+    setAtFloor,
     updateSensorConfig,
     loadAllConfigs,
     setDefaultOctave,
@@ -51,8 +54,12 @@ export default function App() {
         midiPort={state.midi.outputPortName}
         synthEnabled={state.synthEnabled}
         ccMode={state.ccMode}
+        atInvert={state.atInvert}
+        atFloor={state.atFloor}
         onToggleSynth={toggleSynth}
         onToggleCcMode={toggleCcMode}
+        onAtInvertChange={setAtInvert}
+        onAtFloorChange={setAtFloor}
         onOctaveChange={setDefaultOctave}
       />
 
@@ -66,6 +73,7 @@ export default function App() {
         onDisconnectMidiOutput={disconnectMidiOutput}
         onRefreshMidi={refreshMidiOutputs}
         onTestMidi={testMidiOutput}
+        onTestAftertouch={testAftertouch}
       />
 
       {/* Setup Guide (only shown when no MIDI ports) */}

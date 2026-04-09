@@ -1,4 +1,4 @@
-export type MidiMessageType = 'noteOn' | 'noteOff' | 'polyAftertouch';
+export type MidiMessageType = 'noteOn' | 'noteOff' | 'channelAftertouch';
 
 export interface MidiMessage {
   type: MidiMessageType;
@@ -52,6 +52,8 @@ export interface AppState {
   sensorConfigs: SensorNoteConfig[];
   synthEnabled: boolean;
   ccMode: boolean;
+  atInvert: boolean;
+  atFloor: number;
   octave: number;
   recentMessages: MidiMessage[];
   error: string | null;
@@ -66,6 +68,7 @@ declare global {
         openOutput: (portName: string) => Promise<boolean>;
         closeOutput: () => Promise<void>;
         send: (data: number[]) => void;
+        testDirect: () => Promise<string>;
       };
     };
   }

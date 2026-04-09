@@ -125,10 +125,24 @@ export class SerialMidiBridge {
   private sensorConfigs: SensorNoteConfig[] = [];
   private octave = 4;
   private activeSensorNotes: Map<number, number[]> = new Map(); // sensor index → active MIDI notes
+  private activeSensorChannels: Map<number, number[]> = new Map(); // sensor index → allocated channels per note
+
+  // MPE channel allocator: channels 2-16 (15 member channels)
+  private mpeChannelPool = new Set([2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]);
 
   // CC mode: send pressure as CC messages (Ableton-compatible for MIDI mapping)
-  public ccMode = true;
+  // Default OFF — only enable when user explicitly wants CC mapping
+  public ccMode = false;
   public ccNumber = 1; // CC1 = Mod Wheel (most universally recognized)
+
+  // Aftertouch calibration
+  public atInvert = false;     // false = nah=max, true = weit=max
+  public atFloor = 64;         // values below floor → 0 (deadzone, default 50%)
+
+  // Aftertouch smoothing (EMA per sensor)
+  private smoothedPressure: Map<number, number> = new Map();
+  private readonly smoothingAlpha = 0.25; // 0 = very smooth, 1 = no smoothing
+  private readonly minPressureChange = 2;  // ignore changes smaller than this
 
   public readonly synth = new BuiltInSynth();
 
@@ -159,6 +173,28 @@ export class SerialMidiBridge {
     });
   }
 
+  private allocateChannel(): number {
+    // Grab first available MPE member channel
+    for (const ch of this.mpeChannelPool) {
+      this.mpeChannelPool.delete(ch);
+      return ch;
+    }
+    // Fallback: reuse channel 2 if all 15 are in use (shouldn't happen with 6 sensors)
+    return 2;
+  }
+
+  private releaseChannel(ch: number): void {
+    this.mpeChannelPool.add(ch);
+  }
+
+  /** Apply aftertouch calibration: invert + deadzone + rescale */
+  private calibratePressure(raw: number): number {
+    let v = this.atInvert ? 127 - raw : raw;
+    if (v <= this.atFloor) return 0;
+    // Rescale floor..127 → 0..127
+    return Math.round(((v - this.atFloor) / (127 - this.atFloor)) * 127);
+  }
+
   // --- Serial Event Handling ---
 
   private handleSerialEvent(evt: SerialEvent): void {
@@ -170,40 +206,62 @@ export class SerialMidiBridge {
         const prevNotes = this.activeSensorNotes.get(evt.sensorIndex);
         const newNotes = this.getNotesForSensor(evt.sensorIndex);
 
+        const calibrated = this.calibratePressure(evt.pressure);
+
         if (!prevNotes) {
-          // New activation → send noteOn for all chord notes
+          // New activation → allocate one MPE channel per note & send noteOn
+          this.smoothedPressure.set(evt.sensorIndex, calibrated);
           this.activeSensorNotes.set(evt.sensorIndex, newNotes);
+          const channels: number[] = [];
           for (const note of newNotes) {
+            const ch = this.allocateChannel();
+            channels.push(ch);
             const msg: MidiMessage = {
-              type: 'noteOn', channel: 1, note, velocity: 100, pressure: 0,
+              type: 'noteOn', channel: ch, note, velocity: 100, pressure: 0,
               timestamp: Date.now(),
             };
             this.dispatchMidi(msg);
           }
+          this.activeSensorChannels.set(evt.sensorIndex, channels);
         }
 
-        // Always send aftertouch
-        for (const note of newNotes) {
-          const msg: MidiMessage = {
-            type: 'polyAftertouch', channel: 1, note, velocity: 0,
-            pressure: evt.pressure, timestamp: Date.now(),
-          };
-          this.dispatchMidi(msg);
+        // Smooth aftertouch with EMA
+        const prev = this.smoothedPressure.get(evt.sensorIndex) ?? calibrated;
+        const smoothed = Math.round(prev + this.smoothingAlpha * (calibrated - prev));
+        const clamped = Math.min(127, Math.max(0, smoothed));
+
+        // Only send if change is significant enough
+        if (Math.abs(clamped - prev) >= this.minPressureChange || !prevNotes) {
+          this.smoothedPressure.set(evt.sensorIndex, clamped);
+          // Send Channel Aftertouch on each allocated channel
+          const channels = this.activeSensorChannels.get(evt.sensorIndex) ?? [];
+          for (const ch of channels) {
+            const msg: MidiMessage = {
+              type: 'channelAftertouch', channel: ch, note: 0, velocity: 0,
+              pressure: clamped, timestamp: Date.now(),
+            };
+            this.dispatchMidi(msg);
+          }
         }
         break;
       }
 
       case 'sensorOff': {
         const notes = this.activeSensorNotes.get(evt.sensorIndex);
-        if (notes) {
-          for (const note of notes) {
+        const channels = this.activeSensorChannels.get(evt.sensorIndex);
+        if (notes && channels) {
+          for (let i = 0; i < notes.length; i++) {
+            const ch = channels[i];
             const msg: MidiMessage = {
-              type: 'noteOff', channel: 1, note, velocity: 0, pressure: 0,
+              type: 'noteOff', channel: ch, note: notes[i], velocity: 0, pressure: 0,
               timestamp: Date.now(),
             };
             this.dispatchMidi(msg);
+            this.releaseChannel(ch);
           }
           this.activeSensorNotes.delete(evt.sensorIndex);
+          this.activeSensorChannels.delete(evt.sensorIndex);
+          this.smoothedPressure.delete(evt.sensorIndex);
         }
         break;
       }
@@ -211,15 +269,19 @@ export class SerialMidiBridge {
       case 'octaveChange': {
         // Turn off all active notes before octave change
         for (const [sensorIdx, notes] of this.activeSensorNotes) {
-          for (const note of notes) {
+          const channels = this.activeSensorChannels.get(sensorIdx) ?? [];
+          for (let i = 0; i < notes.length; i++) {
+            const ch = channels[i];
             const msg: MidiMessage = {
-              type: 'noteOff', channel: 1, note, velocity: 0, pressure: 0,
+              type: 'noteOff', channel: ch, note: notes[i], velocity: 0, pressure: 0,
               timestamp: Date.now(),
             };
             this.dispatchMidi(msg);
+            if (ch) this.releaseChannel(ch);
           }
         }
         this.activeSensorNotes.clear();
+        this.activeSensorChannels.clear();
         this.octave = evt.octave;
         break;
       }
@@ -349,6 +411,8 @@ export class SerialMidiBridge {
     this._serialPortName = '';
     this.parser.reset();
     this.activeSensorNotes.clear();
+    this.activeSensorChannels.clear();
+    this.mpeChannelPool = new Set([2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]);
     this.synth.allNotesOff();
     this.notifyState();
   }
@@ -364,6 +428,14 @@ export class SerialMidiBridge {
     if (ok) {
       this.midiConnected = true;
       this._midiPortName = portName;
+      // Send MPE Configuration Message (MCM) on Ch 1
+      // RPN 0x0006 = MPE Configuration, Data Entry = zone size
+      this.midiPort.send([0xb0, 0x65, 0x00]); // CC101 RPN MSB = 0
+      this.midiPort.send([0xb0, 0x64, 0x06]); // CC100 RPN LSB = 6 (MCM)
+      this.midiPort.send([0xb0, 0x06, 0x0f]); // CC6   Data Entry = 15 member channels (ch 2-16)
+      this.midiPort.send([0xb0, 0x65, 0x7f]); // CC101 RPN reset
+      this.midiPort.send([0xb0, 0x64, 0x7f]); // CC100 RPN reset
+      console.log('[MIDI] Sent MPE Configuration: Lower Zone, 15 member channels (ch 2-16)');
     } else {
       this.notifyError(`MIDI "${portName}" konnte nicht geoeffnet werden`);
     }
@@ -393,8 +465,8 @@ export class SerialMidiBridge {
           this.midiPort.send([0xb0 | channel, this.ccNumber, 0]);
         }
         break;
-      case 'polyAftertouch':
-        data.push(0xa0 | channel, msg.note, msg.pressure);
+      case 'channelAftertouch':
+        data.push(0xd0 | channel, msg.pressure);
         // Also send as CC message when CC mode is enabled (for Ableton MIDI mapping)
         if (this.ccMode) {
           this.midiPort.send([0xb0 | channel, this.ccNumber, msg.pressure]);
@@ -416,36 +488,42 @@ export class SerialMidiBridge {
     return true;
   }
 
-  /** Send a test Note + CC sweep for Ableton MIDI mapping */
+  /** Send test aftertouch sweep on all 6 channels (one per sensor) */
   async testAftertouch(): Promise<boolean> {
     if (!this.midiConnected) {
       this.notifyError('Kein MIDI Output verbunden');
       return false;
     }
-    const ccNum = this.ccNumber;
-    console.log(`[MIDI Test] Sending CC${ccNum} sweep to:`, this._midiPortName);
+    console.log('[MIDI Test] MPE Aftertouch sweep on ch2-7 to:', this._midiPortName);
 
-    // Note On
-    this.midiPort.send([0x90, 60, 100]);
-
-    // CC sweep: 0 → 127 → 0 over ~800ms
     const steps = 16;
-    for (let i = 0; i <= steps; i++) {
-      const value = i <= steps / 2
-        ? Math.round((i / (steps / 2)) * 127)
-        : Math.round(((steps - i) / (steps / 2)) * 127);
-      setTimeout(() => {
-        this.midiPort.send([0xb0, ccNum, value]);
-        // Also send poly aftertouch
-        this.midiPort.send([0xa0, 60, value]);
-      }, i * 50);
-    }
+    const channelDelay = (steps + 2) * 50 + 100; // time per channel
 
-    // Note Off after sweep
-    setTimeout(() => {
-      this.midiPort.send([0xb0, ccNum, 0]);
-      this.midiPort.send([0x80, 60, 0]);
-    }, (steps + 1) * 50);
+    for (let sensor = 0; sensor < 6; sensor++) {
+      const ch = sensor + 1; // MIDI channel byte (0-indexed: ch 1=0x01 → member ch 2-7)
+      const baseDelay = sensor * channelDelay;
+
+      // Note On on this member channel
+      setTimeout(() => {
+        this.midiPort.send([0x90 | ch, 60, 100]);
+      }, baseDelay);
+
+      // Channel Aftertouch sweep: 0 → 127 → 0
+      for (let i = 0; i <= steps; i++) {
+        const value = i <= steps / 2
+          ? Math.round((i / (steps / 2)) * 127)
+          : Math.round(((steps - i) / (steps / 2)) * 127);
+        setTimeout(() => {
+          this.midiPort.send([0xd0 | ch, value]);
+        }, baseDelay + (i + 1) * 50);
+      }
+
+      // Note Off after sweep
+      setTimeout(() => {
+        this.midiPort.send([0xd0 | ch, 0]);
+        this.midiPort.send([0x80 | ch, 60, 0]);
+      }, baseDelay + (steps + 1) * 50);
+    }
 
     return true;
   }
@@ -462,11 +540,13 @@ export class SerialMidiBridge {
 
     const outputs = await this.listMidiOutputs();
     if (outputs.length > 0) {
-      const loopMidi = outputs.find((o) =>
-        o.name.toLowerCase().includes('loopmidi') ||
-        o.name.toLowerCase().includes('loop midi') ||
-        o.name.toLowerCase().includes('virtual midi')
-      );
+      const loopMidi = outputs.find((o) => {
+        const name = o.name.toLowerCase();
+        return name.includes('loopmidi') ||
+          name.includes('loop midi') ||
+          name.includes('loopbe') ||
+          name.includes('virtual midi');
+      });
       await this.selectMidiOutput((loopMidi || outputs[0]).name);
     }
   }

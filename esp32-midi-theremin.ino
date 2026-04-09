@@ -11,12 +11,14 @@ constexpr uint8_t NUM_SENSORS         = 6;
 constexpr uint8_t MIN_DISTANCE_CM     = 2;
 constexpr uint8_t MAX_DISTANCE_CM     = 18;   // Maximale Erkennungsdistanz (NewPing-Limit)
 
+constexpr uint8_t POLL_ORDER[NUM_SENSORS] = {0, 3, 1, 4, 2, 5};
+
 constexpr uint8_t DEFAULT_OCTAVE      = 4;
 constexpr uint8_t MIN_OCTAVE          = 0;
 constexpr uint8_t MAX_OCTAVE          = 8;
 
 constexpr uint8_t DEBOUNCE_MS         = 40;
-constexpr uint8_t NOTE_OFF_THRESHOLD  = 5;    // Fehlmessungen bis Note-Off
+constexpr uint8_t NOTE_OFF_THRESHOLD  = 8;    // Fehlmessungen bis Note-Off (höher = stabiler)
 
 // Pins
 constexpr uint8_t trigPins[NUM_SENSORS] = {17, 19, 22, 25, 27, 16};
@@ -38,17 +40,31 @@ public:
 
     inline int fastPing()    { return sonar.ping_cm(); }
 
-    int accuratePing() {
+    // Median von 3 — filtert einzelne Crosstalk-Spikes, nur ~0.6ms extra
+    int quickPing() {
         int a = sonar.ping_cm();
-        delayMicroseconds(350);
+        delayMicroseconds(200);
         int b = sonar.ping_cm();
-        delayMicroseconds(350);
+        delayMicroseconds(200);
         int c = sonar.ping_cm();
-
+        // Median of 3
         if (a > b) std::swap(a, b);
         if (b > c) std::swap(b, c);
         if (a > b) std::swap(a, b);
-        return b;  // Median
+        return b;
+    }
+
+    int accuratePing() {
+        int v[5];
+        for (uint8_t j = 0; j < 5; j++) {
+            v[j] = sonar.ping_cm();
+            if (j < 4) delayMicroseconds(300);
+        }
+        // Simple sort for median of 5
+        for (uint8_t a = 0; a < 4; a++)
+            for (uint8_t b = a + 1; b < 5; b++)
+                if (v[a] > v[b]) std::swap(v[a], v[b]);
+        return v[2];  // Median
     }
 };
 
@@ -63,7 +79,7 @@ std::array<ThereminSensor, NUM_SENSORS> sensors = {
 };
 
 int     currentOctave  = DEFAULT_OCTAVE;
-uint8_t currentSensor  = 0;
+uint8_t pollIndex      = 0;
 
 // Button-Zustand
 struct Button {
@@ -81,6 +97,7 @@ inline uint8_t distanceToVelocity(int cm) {
 }
 
 inline uint8_t distanceToAftertouch(int cm) {
+    // Roh: nah = 127, weit = 0 — Kalibrierung passiert in der App
     return constrain(map(cm, MAX_DISTANCE_CM, MIN_DISTANCE_CM, 0, 127), 0, 127);
 }
 
@@ -139,14 +156,14 @@ void handleButtons() {
 
 // ─── Sensor Polling (Round-Robin: 1 Sensor pro Loop) ─────────────────────────
 void pollSensors() {
-    uint8_t i = currentSensor;
-    currentSensor = (currentSensor + 1) % NUM_SENSORS;
+    uint8_t i = POLL_ORDER[pollIndex];
+    pollIndex = (pollIndex + 1) % NUM_SENSORS;
 
     auto& s = sensors[i];
     int cm;
 
     if (!s.active) {
-        cm = s.fastPing();
+        cm = s.quickPing();
 
         if (cm >= MIN_DISTANCE_CM) {
             sendNoteOn(i, distanceToVelocity(cm));
@@ -162,15 +179,15 @@ void pollSensors() {
             s.missCount = 0;
             uint8_t aftertouch = distanceToAftertouch(cm);
 
-            if (abs(aftertouch - s.lastSent) > 3) {
+            if (abs(aftertouch - s.lastSent) > 4) {
                 sendNoteOn(i, aftertouch);
                 s.lastSent = aftertouch;
             }
         }
         else if (++s.missCount >= NOTE_OFF_THRESHOLD) {
             sendNoteOff(i);
-            s.active    = false;
-            s.lastSent  = 0;
+            s.active       = false;
+            s.lastSent     = 0;
             s.missCount = 0;
         }
     }

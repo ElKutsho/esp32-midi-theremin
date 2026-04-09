@@ -10,6 +10,7 @@ interface ConnectionPanelProps {
   onDisconnectMidiOutput: () => void;
   onRefreshMidi: () => Promise<void>;
   onTestMidi: () => Promise<void>;
+  onTestAftertouch: () => Promise<void>;
 }
 
 export function ConnectionPanel({
@@ -21,6 +22,7 @@ export function ConnectionPanel({
   onDisconnectMidiOutput,
   onRefreshMidi,
   onTestMidi,
+  onTestAftertouch,
 }: ConnectionPanelProps) {
   const [connecting, setConnecting] = useState(false);
   const [expanded, setExpanded] = useState(true);
@@ -143,13 +145,22 @@ export function ConnectionPanel({
                     </svg>
                   </button>
                   {state.midi.outputConnected && (
-                    <button
-                      onClick={onTestMidi}
-                      className="px-2 py-2 rounded-lg border border-green-500/30 hover:bg-green-500/10 transition-smooth text-green-400 hover:text-green-300 text-xs font-medium cursor-pointer"
-                      title="Test-Note an MIDI Output senden"
-                    >
-                      Test
-                    </button>
+                    <>
+                      <button
+                        onClick={onTestMidi}
+                        className="px-2 py-2 rounded-lg border border-green-500/30 hover:bg-green-500/10 transition-smooth text-green-400 hover:text-green-300 text-xs font-medium cursor-pointer"
+                        title="Test-Note an MIDI Output senden"
+                      >
+                        Test
+                      </button>
+                      <button
+                        onClick={onTestAftertouch}
+                        className="px-2 py-2 rounded-lg border border-amber-500/30 hover:bg-amber-500/10 transition-smooth text-amber-400 hover:text-amber-300 text-xs font-medium cursor-pointer"
+                        title="Aftertouch-Sweep auf allen 6 Channels senden"
+                      >
+                        AT Test
+                      </button>
+                    </>
                   )}
                 </div>
               </div>

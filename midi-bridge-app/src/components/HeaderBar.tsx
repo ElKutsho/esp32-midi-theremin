@@ -9,12 +9,16 @@ interface HeaderBarProps {
   midiPort: string | null;
   synthEnabled: boolean;
   ccMode: boolean;
+  atInvert: boolean;
+  atFloor: number;
   onToggleSynth: () => void;
   onToggleCcMode: () => void;
+  onAtInvertChange: (invert: boolean) => void;
+  onAtFloorChange: (floor: number) => void;
   onOctaveChange: (octave: number) => void;
 }
 
-export function HeaderBar({ serialConnected, midiConnected, octave, serialPort, midiPort, synthEnabled, ccMode, onToggleSynth, onToggleCcMode, onOctaveChange }: HeaderBarProps) {
+export function HeaderBar({ serialConnected, midiConnected, octave, serialPort, midiPort, synthEnabled, ccMode, atInvert, atFloor, onToggleSynth, onToggleCcMode, onAtInvertChange, onAtFloorChange, onOctaveChange }: HeaderBarProps) {
   return (
     <div className="drag-region border-b border-border-subtle bg-bg-secondary/50">
       {/* Row 1: Title — Octave — Status (CSS Grid for true centering) */}
@@ -84,6 +88,34 @@ export function HeaderBar({ serialConnected, midiConnected, octave, serialPort, 
           </svg>
           Internal Synth
         </button>
+
+        <div className="w-px h-4 bg-border-subtle mx-1" />
+
+        <button
+          onClick={() => onAtInvertChange(!atInvert)}
+          className={`flex items-center gap-1 px-2 py-0.5 rounded-md border text-[10px] font-medium transition-all duration-200 cursor-pointer ${
+            atInvert
+              ? 'border-amber-500/40 bg-amber-500/15 text-amber-300 hover:bg-amber-500/25'
+              : 'border-border-subtle bg-bg-secondary/50 text-gray-500 hover:text-gray-400'
+          }`}
+          title={atInvert ? 'Aftertouch: weit=max, nah=min' : 'Aftertouch: nah=max, weit=min'}
+        >
+          {atInvert ? 'AT Inv' : 'AT Norm'}
+        </button>
+
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] text-gray-500">Floor</span>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={atFloor}
+            onChange={(e) => onAtFloorChange(Number(e.target.value))}
+            className="w-16 h-1 accent-amber-500 cursor-pointer"
+            title={`Aftertouch Deadzone: ${Math.round(atFloor / 127 * 100)}%`}
+          />
+          <span className="text-[10px] text-gray-500 w-6 tabular-nums">{atFloor}</span>
+        </div>
       </div>
     </div>
   );

@@ -7,13 +7,13 @@ interface MidiLogProps {
 const TYPE_COLORS: Record<string, string> = {
   noteOn: 'text-green-400',
   noteOff: 'text-red-400',
-  polyAftertouch: 'text-amber-400',
+  channelAftertouch: 'text-amber-400',
 };
 
 const TYPE_LABELS: Record<string, string> = {
   noteOn: 'NOTE ON ',
   noteOff: 'NOTE OFF',
-  polyAftertouch: 'POLY AT ',
+  channelAftertouch: 'CH AT   ',
 };
 
 function noteToName(note: number): string {
@@ -44,9 +44,10 @@ export function MidiLog({ messages }: MidiLogProps) {
           <span className={`font-semibold w-20 ${TYPE_COLORS[msg.type]}`}>
             {TYPE_LABELS[msg.type]}
           </span>
+          <span className="text-gray-500 w-8">ch{msg.channel}</span>
           <span className="text-gray-300 w-12">{noteToName(msg.note)}</span>
           <span className="text-gray-500">
-            {msg.type === 'polyAftertouch'
+            {msg.type === 'channelAftertouch'
               ? `pressure: ${msg.pressure}`
               : `vel: ${msg.velocity}`}
           </span>

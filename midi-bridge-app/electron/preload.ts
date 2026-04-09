@@ -9,5 +9,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     openOutput: (portName: string): Promise<boolean> => ipcRenderer.invoke('midi:open-output', portName),
     closeOutput: (): Promise<void> => ipcRenderer.invoke('midi:close-output'),
     send: (data: number[]): void => ipcRenderer.send('midi:send', data),
+    testDirect: (): Promise<string> => ipcRenderer.invoke('midi:test-direct'),
   },
 });

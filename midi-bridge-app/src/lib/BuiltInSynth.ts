@@ -112,7 +112,7 @@ export class BuiltInSynth {
       case 'noteOff':
         this.noteOff(msg.note);
         break;
-      case 'polyAftertouch':
+      case 'channelAftertouch':
         this.aftertouch(msg.note, msg.pressure);
         break;
     }

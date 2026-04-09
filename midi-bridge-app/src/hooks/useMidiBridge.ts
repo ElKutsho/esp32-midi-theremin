@@ -84,7 +84,9 @@ export function useMidiBridge() {
       sensors: createDefaultSensors(configs),
       sensorConfigs: configs,
       synthEnabled: false,
-      ccMode: true,
+      ccMode: false,
+      atInvert: false,
+      atFloor: 64,
       octave: 4,
       recentMessages: [],
       error: null,
@@ -275,6 +277,11 @@ export function useMidiBridge() {
     await bridgeRef.current.testMidiOutput();
   }, []);
 
+  const testAftertouch = useCallback(async () => {
+    if (!bridgeRef.current) return;
+    await bridgeRef.current.testAftertouch();
+  }, []);
+
   const toggleCcMode = useCallback(() => {
     if (!bridgeRef.current) return;
     const next = !bridgeRef.current.ccMode;
@@ -287,6 +294,18 @@ export function useMidiBridge() {
     const next = !bridgeRef.current.synth.enabled;
     bridgeRef.current.synth.enabled = next;
     setState((prev) => ({ ...prev, synthEnabled: next }));
+  }, []);
+
+  const setAtInvert = useCallback((invert: boolean) => {
+    if (!bridgeRef.current) return;
+    bridgeRef.current.atInvert = invert;
+    setState((prev) => ({ ...prev, atInvert: invert }));
+  }, []);
+
+  const setAtFloor = useCallback((floor: number) => {
+    if (!bridgeRef.current) return;
+    bridgeRef.current.atFloor = Math.max(0, Math.min(126, floor));
+    setState((prev) => ({ ...prev, atFloor: bridgeRef.current!.atFloor }));
   }, []);
 
   const setDefaultOctave = useCallback((newOctave: number) => {
@@ -340,7 +359,10 @@ export function useMidiBridge() {
     disconnectMidiOutput,
     refreshMidiOutputs,
     testMidiOutput,
+    testAftertouch,
     toggleCcMode,
+    setAtInvert,
+    setAtFloor,
     updateSensorConfig,
     loadAllConfigs,
     setDefaultOctave,

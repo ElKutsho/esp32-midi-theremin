@@ -48,7 +48,6 @@ async function listMidiOutputs(): Promise<string[]> {
   await jzzReady;
   if (!jzzEngine) return [];
   try {
-    // Refresh to detect hot-plugged devices (loopMIDI started after app, etc.)
     await jzzEngine.refresh();
     const info = jzzEngine.info();
     const outputs: string[] = info.outputs.map((o: any) => o.name);
@@ -96,11 +95,38 @@ async function closeMidiOutput(): Promise<void> {
 }
 
 function sendMidi(data: number[]): void {
-  if (!midiOut) return;
+  if (!midiOut) {
+    console.warn('[MIDI Main] Send called but no output open!');
+    return;
+  }
   try {
     midiOut.send(data);
   } catch (err) {
     console.error('[MIDI Main] Send error:', err);
+  }
+}
+
+/** Direct test from main process — bypasses renderer IPC to isolate the problem */
+async function testMidiDirect(): Promise<string> {
+  if (!midiOut) return 'ERROR: midiOut is null';
+  try {
+    console.log('[MIDI Main] Direct test: sending C4 noteOn via .send([])...');
+    midiOut.send([0x90, 60, 100]);
+
+    console.log('[MIDI Main] Direct test: sending C4 noteOn via .noteOn()...');
+    midiOut.noteOn(0, 60, 100);
+
+    setTimeout(() => {
+      try {
+        midiOut.send([0x80, 60, 0]);
+        midiOut.noteOff(0, 60);
+      } catch {}
+    }, 1000);
+
+    return `OK — sent to "${midiPortName}". Check Ableton now.`;
+  } catch (err: any) {
+    console.error('[MIDI Main] Direct test error:', err);
+    return `ERROR: ${err.message}`;
   }
 }
 
@@ -129,6 +155,10 @@ function setupIPC(): void {
 
   ipcMain.on('midi:send', (_event, data: number[]) => {
     sendMidi(data);
+  });
+
+  ipcMain.handle('midi:test-direct', async () => {
+    return testMidiDirect();
   });
 }
 
